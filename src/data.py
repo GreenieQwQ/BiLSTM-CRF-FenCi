@@ -49,7 +49,7 @@ class FenCiDataset(D.Dataset):
 
 
 class FenCiDataLoader(D.DataLoader):
-    def __init__(self, dataset, word2idx: word2Idx, tensor_lens=True, mode="SBME", **kwargs):
+    def __init__(self, dataset, word2idx: word2Idx, device="cpu", tensor_lens=True, mode="SBME", **kwargs):
         super(FenCiDataLoader, self).__init__(
             dataset=dataset,
             collate_fn=self.collate_fn,
@@ -58,6 +58,7 @@ class FenCiDataLoader(D.DataLoader):
         self.mode = mode
         self.tensor_lens = tensor_lens
         self.word2idx = word2idx
+        self.device = device
 
     def unlexicalize(self, sent):
         return [self.word2idx[w] for w in sent]  # return [self.word2idx[w] for w in sent]
@@ -95,7 +96,9 @@ class FenCiDataLoader(D.DataLoader):
             y_raw.append(_y)
         x, y, m = self.pad(x_raw, y_raw)
         # 返回batch pad+转为idx后的张量 以及可用于mask的lens
-        return torch.LongTensor(x), torch.LongTensor(self.tag_2_ix(y)), torch.ByteTensor(m)
+        return torch.LongTensor(x).to(self.device), \
+               torch.LongTensor(self.tag_2_ix(y)).to(self.device), \
+               torch.ByteTensor(m).to(self.device)
 
     # shuffle 数据
     def shuffle(self):

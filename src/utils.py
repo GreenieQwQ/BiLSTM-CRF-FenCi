@@ -5,29 +5,44 @@ import numpy as np
 from preprocess import *
 
 
-# 功能：根据tag分词
-def splitSentence(text, label):
+# 功能：根据BI tag分词
+def generateFenCi(texts, tags):
     # 保证程序的正确性
-    assert len(text) == len(label)
-    aspects = []
-    aspect = ""
-    for i, word in enumerate(text):
-        if label[i] == 'B':
-            aspect = text[i]
-        elif label[i] == 'O' or label[i] == tag2ix['O']:
-            if aspect != "":
-                aspects.append(aspect)
-            aspect = ""
-        elif label[i] == 'I' or label[i] == tag2ix['I']:
-            aspect += " " + text[i]
-        else:
-            raise RuntimeError("Unexpected label: " + str(label[i]))
-        # endif
+    assert len(texts) == len(tags)
+    FenCis = []
+    print("Generating fenci...")
+    for sent, tag in zip(texts, tags):
+        FenCiDeSent = []  # 存储分词的一行句子
+        fenci = ""
+        for w, t in zip(sent, tag):
+            if t == "B":
+                fenci += w
+            else:  # I tag
+                if fenci != "":  # 非空
+                    FenCiDeSent.append(fenci)
+                    fenci = ""
+                fenci += w
+            # endif
+        # endfor
+        # 加上最后一个词
+        if fenci != "":
+            FenCiDeSent.append(fenci)
+        # 此句子分词完毕
+        FenCis.append(FenCiDeSent)
     # endfor
-    # 小心最后一个BI后无O
-    if aspect != "":
-        aspects.append(aspect)
-    return aspects
+    return FenCis
+
+
+# 功能：将分词结果写入文件
+def writeFenCiResult(texts, tags, _path):
+    f = open(_path, 'w', encoding="utf-8")
+    fenciRes = generateFenCi(texts, tags)
+    print("Writing FenCi to File...")
+    for sents in tqdm(fenciRes):
+        s = " ".join(sents)
+        f.write(s)
+    # endfor
+    print("Done.")
 
 
 # 功能：获取在集合上验证的指标P R F
@@ -41,7 +56,7 @@ def SBMS_Validate(_y_true, _y_pred):
     f1 /= len(_y_true)
     # p = precision_score(y_true, y_pred)
     # r = recall_score(y_true, y_pred)
-    #print('P = %f -- R = %f -- F1 = %f' %
+    # print('P = %f -- R = %f -- F1 = %f' %
     #      (p, r, f1))
     print("F1 score: %2f" % f1)
     return f1
@@ -53,9 +68,10 @@ def getPrediction(loader, the_model, ix_to_tag):
     with torch.no_grad():
         for sentences, y, mask in loader:
             prediction = list(the_model(sentences, mask))
-            pre.extend([[ix_to_tag[ix] for ix in pred] for pred in prediction ])
+            pre.extend([[ix_to_tag[ix] for ix in pred] for pred in prediction])
             # print(pre)
             # print(y)
+        # endfor
     return pre
 
 
@@ -66,6 +82,7 @@ def pack(x, y):
     for i in range(len(x)):
         res.append((x[i], y[i]))
     return res
+
 
 """
     输入：seq：sentence

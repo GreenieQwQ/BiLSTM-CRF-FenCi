@@ -12,7 +12,7 @@ torch.manual_seed(1)
 # TODO:将batch的模型编写
 # TODO：LSTM的batch流程
 
-class BiLSTM_CRF(nn.Module):
+class BiLSTM(nn.Module):
     """
         输入：tag_to_ix：字典：将所有的标签转换为index
             vocab_size: vocabulary的长度（一共有多少个词）
@@ -22,7 +22,7 @@ class BiLSTM_CRF(nn.Module):
     """
 
     def __init__(self, vocab_size, tag_to_ix, embedding_dim, hidden_dim, embedding_mat=None):
-        super(BiLSTM_CRF, self).__init__()
+        super(BiLSTM, self).__init__()
         self.embedding_dim = embedding_dim
         self.hidden_dim = hidden_dim
         self.vocab_size = vocab_size
@@ -45,53 +45,49 @@ class BiLSTM_CRF(nn.Module):
         # 将隐状态映射到targetSize 仅线性加权
         self.hidden2tag = nn.Linear(hidden_dim, self.tagset_size)
 
-        # CRF的实现自动添加start 与 end
-        self.crf = CRF(len(tag_to_ix) - 2, use_gpu=False)
-
-    #     # 初始的隐状态H_0+C_0
-    #     self.hidden = self.init_hidden()
-    #
-    # def init_hidden(self):
-    #     return (torch.randn(2, 1, self.hidden_dim // 2),
-    #             torch.randn(2, 1, self.hidden_dim // 2))
 
     """
         输入：已batch的sentence
         输出：状态函数——emission score of the tags
     """
-
-    def _get_lstm_features(self, sentences):
-        # batch_size = len(sentences)
+    def get_lstm_features(self, sentences, masks):
+        # get input length
+        input_length = torch.sum(masks, dim=1)
         # 初始化隐状态h_0，c_0
         # self.hidden = self.init_hidden()
         # 使用词向量输入
         embeds = self.word_embeds(sentences)
-        lstm_out, _ = self.lstm(embeds)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(embeds, input_length, batch_first=True, enforce_sorted=False)
+        lstm_out, _ = self.lstm(packed)
+        # Unpack
+        lstm_out = torch.nn.utils.rnn.pad_packed_sequence(lstm_out, batch_first=True, padding_value=0)
         # output is of shape (seq_len, batch, num_directions * hidden_size)
         # batch = 1 重新扁平化
         # lstm_out = lstm_out.view(len(sentences), self.hidden_dim)
         lstm_feats = self.hidden2tag(lstm_out)
         return lstm_feats
 
-    # 负对数似然
-    def neg_log_likelihood(self, sentences, tags, mask):
-        emissions = self._get_lstm_features(sentences)
-        losses = self.crf.forward(emissions, tags, mask)
-        loss = torch.sum(losses) / len(sentences)
-        # 负对数似然
-        return -loss
+    def forward_alg(self, sentences, masks):
+
+        # Get the emission scores from the BiLSTM
+        lstm_feats = self.get_lstm_features(sentences, masks)
+        _, prediction = torch.max(lstm_feats, 2)
+        return prediction
 
     def forward(self, sentences, masks):
         # Get the emission scores from the BiLSTM
-        lstm_feats = self._get_lstm_features(sentences)
-
-        # Find the best path, given the features.
-        tag_seq = self.crf.viterbi_decode(lstm_feats, masks)
-        return tag_seq
+        lstm_feats = self.get_lstm_features(sentences, masks)
+        _, predicted = torch.max(lstm_feats, 2)
+        tags = predicted.numpy()
+        result = []
+        for i, t in enumerate(tags):
+            num = torch.sum(masks[i]).item()
+            result.append(tags[i][:num])
+        return result
 
 
 # 功能：训练
-def train(HIDDEN_DIM=200, dir_path="../data/model/batch-blstm-crf/", mod=BiLSTM_CRF, b_size=500):
+def train(HIDDEN_DIM=200, dir_path="../data/model/batch-blstm/", mod=BiLSTM, b_size=500, use_cuda=False):
     trPath = "../data/corpus/msr_training.utf8"
     testPath = "../data/corpus/msr_test_gold.utf8"
     batchSize = b_size
@@ -112,8 +108,10 @@ def train(HIDDEN_DIM=200, dir_path="../data/model/batch-blstm-crf/", mod=BiLSTM_
     vocab = word2Idx(getWord2Ix(trSet.x_data))
 
     # 使用cuda加速运算
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")  # batch过大、显存不足时使用
+    if use_cuda:
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device("cpu")  # batch过大、显存不足时使用
     trLoader = FenCiDataLoader(trSet, vocab, batch_size=batchSize, device=device)
     valLoader = FenCiDataLoader(valSet, vocab, batch_size=batchSize, device=device)
     testLoader = FenCiDataLoader(testSet, vocab, batch_size=batchSize, device=device)
@@ -163,9 +161,9 @@ def train(HIDDEN_DIM=200, dir_path="../data/model/batch-blstm-crf/", mod=BiLSTM_
         f1_record = list(np.load(f1_record_path))
 
     # 在测试集上进行测试、打印指标P R F值
-    print("Test:")
-    pre_tags = getPrediction(testLoader, model, SBME_ix_to_tag)
-    SBMS_Validate(testSet.y_data, pre_tags)
+    # print("Test:")
+    # pre_tags = getPrediction(testLoader, model, SBME_ix_to_tag)
+    # SBMS_Validate(testSet.y_data, pre_tags)
 
     iter_times = 100
     # tol_count: 判断迭代是否应该终止
@@ -187,8 +185,13 @@ def train(HIDDEN_DIM=200, dir_path="../data/model/batch-blstm-crf/", mod=BiLSTM_
             # Step 1. 清零积累的梯度
             model.zero_grad()
 
-            # Step 2. 前向计算负对数似然——损失函数.
-            loss = model.neg_log_likelihood(sentences, tags, masks)
+            # Step 2. 前向计算交叉熵——损失函数.
+            criterion = nn.NLLLoss()
+            prediction = model.forward_alg(sentences, masks)
+            # 将结果与tag都mask掉 使得一致
+            masked_pre = torch.mul(prediction, masks)
+            masked_tags = torch.mul(tags, masks)
+            loss = criterion(masked_pre, masked_tags)
 
             # Step 3. 反向传播
             loss.backward()
@@ -252,4 +255,4 @@ def train(HIDDEN_DIM=200, dir_path="../data/model/batch-blstm-crf/", mod=BiLSTM_
 
 
 if __name__ == "__main__":
-    train(b_size=500)
+    train(b_size=200, use_cuda=False)

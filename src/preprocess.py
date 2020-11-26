@@ -13,6 +13,7 @@ def get_ix_to_tag(dictionary):
         ix_to_tag[dictionary[key]] = key
     return ix_to_tag
 
+
 # 全局变量
 START_TAG = "<START>"
 STOP_TAG = "<STOP>"
@@ -29,9 +30,9 @@ def readCorpus(_path, mode="SBME"):
     f = open(_path, 'r', encoding='utf-8')
     x, y = [], []
     for line in f:
-        x_line = line.split()   # 分好的各个词
-        x_meta = []     # 存储单个letter
-        y_meta = []     # 存储对应letter的tag
+        x_line = line.split()  # 分好的各个词
+        x_meta = []  # 存储单个letter
+        y_meta = []  # 存储对应letter的tag
         # 打上tag
         for word in x_line:
             if len(word) == 1:
@@ -58,6 +59,7 @@ def readCorpus(_path, mode="SBME"):
     # endfor
     return x, y
 
+
 # 功能：将SBME标记法转换为BI标记
 def SBME2BI(tags):
     BItags = []
@@ -68,7 +70,10 @@ def SBME2BI(tags):
             BItags.append("I")
     return BItags
 
+
 STOP_WORD = '<unk>'
+
+
 # 功能：根据tr_x获取词的编码字典
 def getWord2Ix(tr_x):
     # 将每个词按照出现的顺序映射到相应数字
@@ -81,6 +86,7 @@ def getWord2Ix(tr_x):
     word2Ix[STOP_WORD] = len(word2Ix)  # 代表停用词
     return word2Ix
 
+
 # 封装停用词处理的字典
 class word2Idx:
     def __init__(self, tr_x):
@@ -89,8 +95,9 @@ class word2Idx:
     def __getitem__(self, key):
         if key in self.dict:
             return self.dict[key]
-        else:   #
+        else:  #
             return self.dict[STOP_WORD]
+
 
 # 功能：获取预训练的词向量字典
 def getWord2Vec(vecPath="../data/word2vec/sgns.renmin.bigram-char"):
@@ -100,6 +107,7 @@ def getWord2Vec(vecPath="../data/word2vec/sgns.renmin.bigram-char"):
     end_time = time.time()
     print("Load embedding consumed: {:.2f}".format(end_time - begin_time))
     return word2Vec
+
 
 # 功能：通过数据集的word_to_idx得到本数据集对应的词向量矩阵
 def getEmbedding(word_to_idx, embedding_mat_path, emb_dim=300):
