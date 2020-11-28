@@ -7,7 +7,8 @@ from tqdm import trange
 from data import *
 
 torch.manual_seed(1)
-
+# 需要padding为0 idx
+SBME_tag_to_ix = {PADDING: 0, "S": 1, "B": 2, "M": 3, "E": 4,  START_TAG: 5, STOP_TAG: 6}
 
 # TODO:将batch的模型编写
 # TODO：LSTM的batch流程
@@ -57,28 +58,26 @@ class BiLSTM(nn.Module):
         # self.hidden = self.init_hidden()
         # 使用词向量输入
         embeds = self.word_embeds(sentences)
-        packed = torch.nn.utils.rnn.pack_padded_sequence(embeds, input_length, batch_first=True, enforce_sorted=False)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(embeds, input_length.to(torch.device("cpu")), batch_first=True, enforce_sorted=False)
         lstm_out, _ = self.lstm(packed)
         # Unpack
         lstm_out = torch.nn.utils.rnn.pad_packed_sequence(lstm_out, batch_first=True, padding_value=0)
         # output is of shape (seq_len, batch, num_directions * hidden_size)
-        # batch = 1 重新扁平化
-        # lstm_out = lstm_out.view(len(sentences), self.hidden_dim)
-        lstm_feats = self.hidden2tag(lstm_out)
+        lstm_feats = self.hidden2tag(lstm_out[0])
         return lstm_feats
 
     def forward_alg(self, sentences, masks):
 
         # Get the emission scores from the BiLSTM
         lstm_feats = self.get_lstm_features(sentences, masks)
-        _, prediction = torch.max(lstm_feats, 2)
-        return prediction
+        return lstm_feats
 
     def forward(self, sentences, masks):
         # Get the emission scores from the BiLSTM
         lstm_feats = self.get_lstm_features(sentences, masks)
         _, predicted = torch.max(lstm_feats, 2)
-        tags = predicted.numpy()
+        p = predicted.to(torch.device("cpu"))
+        tags = p.numpy()
         result = []
         for i, t in enumerate(tags):
             num = torch.sum(masks[i]).item()
@@ -138,7 +137,7 @@ def train(HIDDEN_DIM=200, dir_path="../data/model/batch-blstm/", mod=BiLSTM, b_s
     model.to(device)
     # weight_decay: L2正则化权重的lambda、lr：学习率
     # optimizer = optim.SGD(model.parameters(), lr=0.005, weight_decay=1e-4, momentum=0.9)
-    lr = 0.015
+    lr = 0.025
     optimizer = optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-4,
                            amsgrad=False)
 
@@ -161,9 +160,9 @@ def train(HIDDEN_DIM=200, dir_path="../data/model/batch-blstm/", mod=BiLSTM, b_s
         f1_record = list(np.load(f1_record_path))
 
     # 在测试集上进行测试、打印指标P R F值
-    # print("Test:")
-    # pre_tags = getPrediction(testLoader, model, SBME_ix_to_tag)
-    # SBMS_Validate(testSet.y_data, pre_tags)
+    print("Test:")
+    pre_tags = getPrediction(testLoader, model, SBME_ix_to_tag)
+    SBMS_Validate(testSet.y_data, pre_tags)
 
     iter_times = 100
     # tol_count: 判断迭代是否应该终止
@@ -186,12 +185,12 @@ def train(HIDDEN_DIM=200, dir_path="../data/model/batch-blstm/", mod=BiLSTM, b_s
             model.zero_grad()
 
             # Step 2. 前向计算交叉熵——损失函数.
-            criterion = nn.NLLLoss()
+            criterion = nn.CrossEntropyLoss()
             prediction = model.forward_alg(sentences, masks)
-            # 将结果与tag都mask掉 使得一致
-            masked_pre = torch.mul(prediction, masks)
-            masked_tags = torch.mul(tags, masks)
-            loss = criterion(masked_pre, masked_tags)
+            # 扁平化计算loss
+            p = prediction.view(-1, model.tagset_size)
+            t = tags.view(-1)
+            loss = criterion(p, t)
 
             # Step 3. 反向传播
             loss.backward()
@@ -255,4 +254,4 @@ def train(HIDDEN_DIM=200, dir_path="../data/model/batch-blstm/", mod=BiLSTM, b_s
 
 
 if __name__ == "__main__":
-    train(b_size=200, use_cuda=False)
+    train(b_size=200, use_cuda=True)
