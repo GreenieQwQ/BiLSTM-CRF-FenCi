@@ -40,3 +40,7 @@ Blstm、Lstm模型及训练相关代码可见'blstm.py'及'lstm.py'代码文件�
 
 - python 3.8
 - pytorch==1.7.0
+
+# Author
+
+By 18340206
