@@ -13,7 +13,7 @@
 
 ### Blstm-Crf模型
 
-Blstm-Crf模型及训练相关代码可见于'blstm_crf.py'文件中。
+Blstm-Crf模型及训练相关代码可见于'model.py'文件中。
 
 ### Blstm、Lstm模型
 
