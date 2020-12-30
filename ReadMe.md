@@ -57,7 +57,6 @@ sgns.renmin.bigram-char预训练词向量文件可在https://github.com/Embeddin
 
 - python 3.8
 - pytorch==1.7.0
-- cudatoolkit==10.2
 
 # 依赖安装
 
@@ -95,3 +94,11 @@ python blstm.py
 # 其余模型参数
 
 其余报告中训练的模型参数可在https://github.com/GreenieQwQ/nlp_fenci_parameters下载。
+
+# 测试集结果
+
+测试集结果可见result.utf8
+
+# Author
+
+By 18340206
