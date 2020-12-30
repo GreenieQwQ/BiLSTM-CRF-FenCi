@@ -1,13 +1,18 @@
+# 文件说明
 
 ## 预处理相关代码
 
-### 将数据集提供的xml文件转化为IOB数据
+### 使用预训练词向量
 
-’xml2IOB.py‘代码包含了将数据集提供的xml文件转化为IOB数据的相关函数。
+使用预训练词向量相关函数可见于'preprocess.py'文件。
 
-### 获取Glove词向量
+### 分割数据集、对数据集作padding
 
-加载Glove词向量相关代码为'word2vec.py'文件。
+通过重载dataloader与dataset类来完成目的，相关代码可见于'data.py'文件。
+
+### 读入数据集、进行标注
+
+读取数据集并进行SBME标注相关函数可见于'preprocess.py'文件。
 
 ## 模型相关代码
 
@@ -19,32 +24,74 @@ Blstm-Crf模型及训练相关代码可见于'model.py'文件中。
 
 Blstm、Lstm模型及训练相关代码可见'blstm.py'及'lstm.py'代码文件。
 
+## 辅助函数
+
+评估、根据tag生成分词等辅助函数可见'utils.py'文件。
+
 # 运行说明
 
-需要将文件按照如下方式组织、并且存放相关数据后即可运行相关代码文件：
+本实验运行时文件的组织结构如下：
 
-- src——存放代码的文件夹
+```
+├─data
+│  │  corpus 
+|  |    |  msr_test_gold.utf8
+|  |    |  msr_training.utf8
+│  │  model
+|  |  word2vec
+|  |    |  sgns.renmin.bigram-char
+│
+├─src
+│  │  blstm.py
+│  │  data.py
+│  │  utils.py
+│  │  lstm.py
+|  |  model.py
+│  |  preprocess.py
+|  
+```
 
-- data——存放相关数据的文件夹
-
-  - model——存放模型的文件夹
-    - lstm——存放lstm模型数据的文件夹
-    - blstm——存放blstm模型数据的文件夹
-    - blstm-crf——存放blstm-crf模型数据的文件夹
-
-  - SemEval——存放从官网下载的训练集、测试集的文件夹
-
-  - glove——存放从glove官网加载的txt词向量文件的文件夹
+sgns.renmin.bigram-char预训练词向量文件可在https://github.com/Embedding/Chinese-Word-Vectors下载。
 
 # 运行环境
 
 - python 3.8
 - pytorch==1.7.0
+- cudatoolkit==10.2
 
-# 测试集结果
+# 依赖安装
 
-测试集结果可见result.utf8
+使用语句
 
-# Author
+```
+pip install -r requirement.txt
+```
 
-By 18340206
+即可安装除pytorch外的依赖项。pytorch安装方法可见于https://pytorch.org/get-started/locally/官方网址。
+
+# 运行说明
+
+安装上述依赖、确保文件组织正确，即可使用命令
+
+```
+python model.py 200 --usecuda
+```
+
+训练batch\_size=200的模型。更多运行参数可使用命令
+
+```
+python model.py -h
+```
+
+查看。使用命令
+
+```
+python lstm.py
+python blstm.py
+```
+
+即可运行blstm、lstm模型。
+
+# 其余模型参数
+
+其余报告中训练的模型参数可在https://github.com/GreenieQwQ/nlp_fenci_parameters下载。
