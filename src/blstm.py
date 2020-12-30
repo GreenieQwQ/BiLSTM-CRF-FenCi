@@ -10,9 +10,6 @@ torch.manual_seed(1)
 # 需要padding为0 idx
 SBME_tag_to_ix = {PADDING: 0, "S": 1, "B": 2, "M": 3, "E": 4,  START_TAG: 5, STOP_TAG: 6}
 
-# TODO:将batch的模型编写
-# TODO：LSTM的batch流程
-
 class BiLSTM(nn.Module):
     """
         输入：tag_to_ix：字典：将所有的标签转换为index
@@ -46,24 +43,29 @@ class BiLSTM(nn.Module):
         # 将隐状态映射到targetSize 仅线性加权
         self.hidden2tag = nn.Linear(hidden_dim, self.tagset_size)
 
+    """
+            输入：已batch的sentence
+            输出：状态函数——emission score of the tags
+        """
 
-    """
-        输入：已batch的sentence
-        输出：状态函数——emission score of the tags
-    """
-    def get_lstm_features(self, sentences, masks):
-        # get input length
-        input_length = torch.sum(masks, dim=1)
-        # 初始化隐状态h_0，c_0
-        # self.hidden = self.init_hidden()
+    def get_lstm_features(self, sentences, masks, pad=False):
         # 使用词向量输入
         embeds = self.word_embeds(sentences)
-        packed = torch.nn.utils.rnn.pack_padded_sequence(embeds, input_length.to(torch.device("cpu")), batch_first=True, enforce_sorted=False)
-        lstm_out, _ = self.lstm(packed)
-        # Unpack
-        lstm_out = torch.nn.utils.rnn.pad_packed_sequence(lstm_out, batch_first=True, padding_value=0)
-        # output is of shape (seq_len, batch, num_directions * hidden_size)
-        lstm_feats = self.hidden2tag(lstm_out[0])
+        if pad:  # 使用pack_padded_sequence
+            # get input length
+            input_length = torch.sum(masks, dim=1)
+            # padding 注意到此函数只能用cpu的length
+            packed = torch.nn.utils.rnn. \
+                pack_padded_sequence(embeds, input_length.to(torch.device("cpu")), batch_first=True,
+                                     enforce_sorted=False)
+            lstm_out, _ = self.lstm(packed)
+            # Unpack
+            lstm_out = torch.nn.utils.rnn. \
+                pad_packed_sequence(lstm_out, batch_first=True, padding_value=0)
+            lstm_out = lstm_out[0]  # [1]为长度
+        else:
+            lstm_out, _ = self.lstm(embeds)
+        lstm_feats = self.hidden2tag(lstm_out)
         return lstm_feats
 
     def forward_alg(self, sentences, masks):
@@ -129,6 +131,7 @@ def train(HIDDEN_DIM=200, dir_path="../data/model/batch-blstm/", mod=BiLSTM, b_s
     tol_count_path = batchDir + "/tol_count.npy"
     optimizer_path = batchDir + "/optimizer.pt"
     f1_record_path = batchDir + "/record.npy"
+    fenci_result_path = batchDir + "/result.utf8"
 
     # 记录训练过程中f1值的变化
     f1_record = []
@@ -162,7 +165,7 @@ def train(HIDDEN_DIM=200, dir_path="../data/model/batch-blstm/", mod=BiLSTM, b_s
     # 在测试集上进行测试、打印指标P R F值
     print("Test:")
     pre_tags = getPrediction(testLoader, model, SBME_ix_to_tag)
-    SBMS_Validate(testSet.y_data, pre_tags)
+    SBME_Validate(testSet.y_data, pre_tags)
 
     iter_times = 100
     # tol_count: 判断迭代是否应该终止
@@ -206,7 +209,7 @@ def train(HIDDEN_DIM=200, dir_path="../data/model/batch-blstm/", mod=BiLSTM, b_s
                 print("\nModel and optimizer saved.")
                 # 验证
                 pre_tags = getPrediction(valLoader, model, SBME_ix_to_tag)
-                f1 = SBMS_Validate(valSet.y_data, pre_tags)
+                f1 = SBME_Validate(valSet.y_data, pre_tags)
                 # 记录
                 f1_record.append(f1)
                 np.save(f1_record_path, f1_record)
@@ -240,17 +243,19 @@ def train(HIDDEN_DIM=200, dir_path="../data/model/batch-blstm/", mod=BiLSTM, b_s
     # 在测试集上进行测试、打印指标P R F值
     print("Test:")
     pre_tags = getPrediction(testLoader, model, SBME_ix_to_tag)
-    SBMS_Validate(testSet.y_data, pre_tags)
+    SBME_Validate(testSet.y_data, pre_tags)
+    # 将分词结果输出
+    writeFenCiResult(testSet.x_data, pre_tags, fenci_result_path)
 
     # 最终在验证集上的指标
     print("\nValidate:")
     pre_tags = getPrediction(valLoader, model, SBME_ix_to_tag)
-    SBMS_Validate(valSet.y_data, pre_tags)
+    SBME_Validate(valSet.y_data, pre_tags)
 
     # 最终在训练集上的指标：
     print("\nTrain:")
     pre_tags = getPrediction(trLoader, model, SBME_ix_to_tag)
-    SBMS_Validate(trSet.y_data, pre_tags)
+    SBME_Validate(trSet.y_data, pre_tags)
 
 
 if __name__ == "__main__":

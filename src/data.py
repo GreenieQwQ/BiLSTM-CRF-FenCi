@@ -19,32 +19,31 @@ class FenCiDataset(D.Dataset):
     def __len__(self):
         return len(self.x_data)
 
+    # 功能：随机重排数据集
     def shuffle(self):
         idx = np.arange(len(self))
-        idx = np.random.permutation(idx)  # 复制并重新排序
+        idx = np.random.permutation(idx)  # 重新排序
         self.x_data = [self.x_data[i] for i in idx]
         self.y_data = [self.y_data[i] for i in idx]
 
+    # 功能：按照比率分割数据集
     def split(self, *ratios, shuffle=False):
         idx = np.arange(len(self))
-
         if shuffle:
             idx = np.random.permutation(idx)  # 复制并重新排序
-
         # 各比例
         ratios = [r / sum(ratios) for r in ratios]
-        # 个比例对应的数目
+        # 各比例对应的数目
         counts = [int(round(len(self) * r)) for r in ratios]
         # 得到边界
         cum_counts = [sum(counts[:i + 1]) for i in range(len(ratios))]
         # 补上开头
         bounds = [0] + cum_counts
-
+        # 进行分割
         for i in range(len(bounds) - 1):
             s = copy.copy(self)
             s.x_data = [self.x_data[j] for j in idx[bounds[i]:bounds[i + 1]]]
             s.y_data = [self.y_data[j] for j in idx[bounds[i]:bounds[i + 1]]]
-
             yield s
 
 
@@ -60,6 +59,7 @@ class FenCiDataLoader(D.DataLoader):
         self.word2idx = word2idx
         self.device = device
 
+    # 将字进行embedding编码
     def unlexicalize(self, sent):
         return [self.word2idx[w] for w in sent]  # return [self.word2idx[w] for w in sent]
 
@@ -70,9 +70,9 @@ class FenCiDataLoader(D.DataLoader):
         assert len(x_raw) == len(y_raw)
         x_pad, y_pad, masks = [], [], []
         for i in range(len(x_raw)):
-            padding = "<PAD>"
+            padding = PADDING
             assert len(x_raw[i]) == len(y_raw[i])
-            l = len(x_raw[i])
+            l = len(x_raw[i])  # 利用列表运算实现padding
             x_pad.append(x_raw[i] + [self.word2idx[padding]] * (max_len - l))
             y_pad.append(y_raw[i] + [padding] * (max_len - l))
             masks.append([1] * l + [0] * (max_len - l))
@@ -89,8 +89,7 @@ class FenCiDataLoader(D.DataLoader):
 
     # 读取batch的时候处理数据
     def collate_fn(self, batches):
-        x_raw = []
-        y_raw = []
+        x_raw, y_raw = [], []
         for _x, _y in batches:
             x_raw.append(self.unlexicalize(_x))
             y_raw.append(_y)

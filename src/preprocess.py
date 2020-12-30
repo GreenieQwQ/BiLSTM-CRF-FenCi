@@ -24,9 +24,11 @@ BI_tag_to_ix = {"B": 0, "I": 1, PADDING: 2, START_TAG: 3, STOP_TAG: 4}
 BI_ix_to_tag = get_ix_to_tag(BI_tag_to_ix)
 
 
-# 功能：读取已经分好词的训练集 并且给其打上SBME 4tag标注/ BI 2tag标注
-# 进一步：对句子做padding 使得其能够使用mini-batch
-def readCorpus(_path, mode="SBME"):
+# 功能：读取已经分好词的数据集 并且给其打上SBME 4tag标注
+# 输出：x, y
+# x的元素为列表，对应数据集的句子，列表元素为句子的字
+# y的元素为列表，对应数据集的句子，列表元素为x相应字对应的tag
+def readCorpus(_path):
     f = open(_path, 'r', encoding='utf-8')
     x, y = [], []
     for line in f:
@@ -74,10 +76,9 @@ def SBME2BI(tags):
 STOP_WORD = '<unk>'
 
 
-# 功能：根据tr_x获取词的编码字典
+# 功能：为数据集tr_x中的每个词进行编码 并且为停用词进行编码
 def getWord2Ix(tr_x):
     # 将每个词按照出现的顺序映射到相应数字
-    # 注：tags未用
     word2Ix = {}
     for sentence in tqdm(tr_x):
         for word in sentence:
@@ -95,7 +96,7 @@ class word2Idx:
     def __getitem__(self, key):
         if key in self.dict:
             return self.dict[key]
-        else:  #
+        else:  # 不在字典中，为停用词
             return self.dict[STOP_WORD]
 
 
@@ -109,23 +110,20 @@ def getWord2Vec(vecPath="../data/word2vec/sgns.renmin.bigram-char"):
     return word2Vec
 
 
-# 功能：通过数据集的word_to_idx得到本数据集对应的词向量矩阵
+# 功能：通过数据集的word_to_idx映射得到本数据集对应的词向量矩阵
 def getEmbedding(word_to_idx, embedding_mat_path, emb_dim=300):
     # 未存储对本训练集的embedding
     if not os.path.isfile(embedding_mat_path):
         matrix_len = len(word_to_idx)
         weights_matrix = np.zeros((matrix_len, emb_dim))
-        words_found = 0
-        # 获取词向量字典
+        # 读取预训练的词向量字典
         word2vec = getWord2Vec()
         for word in word_to_idx:
             idx = word_to_idx[word]
             try:
                 weights_matrix[idx] = word2vec.loc[word]
-                words_found += 1
             except KeyError:  # 词向量字典中不存在此单词——比如手动添加的停用词
-                # 采用随机初始化
-                weights_matrix[idx] = np.random.normal(scale=0.6, size=(emb_dim,))
+                weights_matrix[idx] = np.random.normal(scale=0.6, size=(emb_dim,))  # 采用随机初始化
         np.save(embedding_mat_path, weights_matrix)
         return weights_matrix
     else:
